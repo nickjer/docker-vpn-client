@@ -131,3 +131,31 @@ Then run:
 ```sh
 vpn-client
 ```
+
+### Juniper Network Connect
+
+You can connect to a Juniper network with:
+
+```sh
+openconnect --juniper <vpn_host>
+```
+
+### Connect through Chrome
+
+You can set up an SSH proxy with:
+
+```sh
+ssh -o UserKnownHostsFile=/dev/null \
+    -o StrictHostKeyChecking=no \
+    -D 8080
+    -p 4444 root@localhost
+```
+
+and connect to it with Chrome as:
+
+```sh
+google-chrome \
+  --user-data-dir=$(mktemp -d) \
+  --proxy-server="socks://localhost:8080" \
+  --incognito
+```
