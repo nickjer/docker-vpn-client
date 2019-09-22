@@ -1,9 +1,10 @@
 # Docker VPN Client
 
-Docker image for [OpenConnect](http://www.infradead.org/openconnect/) that runs
-an [SSH](https://www.openssh.com/) for easy SSH port forwarding.
+Docker image for [OpenConnect](http://www.infradead.org/openconnect/) and
+[OpenVPN](https://openvpn.net/) that runs an [SSH](https://www.openssh.com/)
+server for easy SSH port forwarding and SOCKS proxying.
 
-## Build
+## Build with Docker
 
 ```sh
 git clone https://github.com/nickjer/docker-vpn-client.git
@@ -11,7 +12,7 @@ cd docker-vpn-client
 docker build --force-rm -t nickjer/docker-vpn-client .
 ```
 
-## Install
+## Install from Docker Hub
 
 ```sh
 docker pull nickjer/docker-vpn-client
@@ -19,60 +20,80 @@ docker pull nickjer/docker-vpn-client
 
 ## Usage
 
-First launch the docker container with the SSH server started and your SSH key
+The docker container is launched with the SSH server started and your SSH key
 copied to the `root` account:
 
 ```sh
-docker run --rm -i -t --privileged -p 4444:22 -e "SSH_KEY=$(cat ~/.ssh/id_rsa.pub)" nickjer/docker-vpn-client
+docker run \
+  --rm \
+  -i \
+  -t \
+  --privileged \
+  --sysctl net.ipv6.conf.all.disable_ipv6=0 \
+  -p 127.0.0.1:4444:22 \
+  -e "SSH_KEY=$(cat ~/.ssh/id_rsa.pub)" \
+  nickjer/docker-vpn-client
 ```
 
-Note that we mapped the host port `4444` to the container's port `22`.
+Note that we mapped the host port `4444` to the container's port `22`, but feel
+free to change this.
 
-From here you will be presented with a prompt, so that you can run the
-`openconnect` client to connect to the VPN of your choosing:
+From here you will be placed inside the container as `root` in a shell process.
+You will then use whatever VPN client you are familiar with to connect to your
+VPN server (may require logging in and two-factor authentication).
+
+For example:
 
 ```sh
 openconnect <host>
 ```
 
-### Using Username/Password
+### SSH Tunnel Example (from container to remote server)
 
-Open a new terminal and ssh to the Docker container:
+*Note: As your private SSH key does not reside in the container, this will only
+work with remote SSH servers that you login with username/password.*
 
-```sh
-ssh -o UserKnownHostsFile=/dev/null \
-    -o StrictHostKeyChecking=no \
-    -p 4444 root@localhost
-```
+1. Open a new terminal and `ssh` to the Docker container:
 
-where we ignore the dynamic host SSH keys.
+   ```sh
+   ssh -o UserKnownHostsFile=/dev/null \
+       -o StrictHostKeyChecking=no \
+       -p 4444 root@localhost
+   ```
 
-From within the container we ssh to the host behind the VPN:
+   where we ignore the dynamic host SSH keys.
 
-```sh
-ssh <username>@<host_behind_proxy>
-```
+2. From within the container we `ssh` to the host behind the VPN:
 
-and authenticate.
+   ```sh
+   ssh <username>@<host_behind_proxy>
+   ```
 
-### Using Local SSH Key
+   and authenticate.
 
-Open a new terminal and setup port forwarding to the SSH host behind the VPN:
+### SSH Tunnel Example (through container to remote server)
 
-```sh
-ssh -o UserKnownHostsFile=/dev/null \
-    -o StrictHostKeyChecking=no \
-    -L 4445:<host_behind_vpn>:22 \
-    -p 4444 root@localhost
-```
+*Note: This method is preferred if you login using SSH public keys.*
 
-where we forward the local port `4445` to the SSH host behind the VPN.
+1. Open a new terminal and setup port forwarding to the SSH host behind the
+   VPN:
 
-Now in **another terminal** you can connect to the SSH host behind the VPN:
+   ```sh
+   ssh -o UserKnownHostsFile=/dev/null \
+       -o StrictHostKeyChecking=no \
+       -L 4445:<host_behind_vpn>:22 \
+       -p 4444 root@localhost
+   ```
 
-```sh
-ssh -p 4445 <user>@localhost
-```
+   where we forward the local port `4445` to the SSH host behind the VPN.
+
+2. Now in **another terminal** you can connect to the SSH host behind the VPN:
+
+   ```sh
+   ssh -p 4445 <user>@localhost
+   ```
+
+## Examples
 
 ### SSH Config
 
@@ -110,14 +131,17 @@ simplify launching VPN clients. Create the script `~/bin/vpn-client` with:
 ```sh
 #!/usr/bin/env bash
 
-docker run \
-  --rm \
-  -i \
-  -t \
-  --privileged \
-  -p ${SSH_PORT:-4444}:22 \
-  -e "SSH_KEY=${SSH_KEY:-$(cat ~/.ssh/id_rsa.pub)}" \
-  nickjer/docker-vpn-client
+exec
+  docker run \
+    --rm \
+    -i \
+    -t \
+    --privileged \
+    --sysctl net.ipv6.conf.all.disable_ipv6=0 \
+    -p "127.0.0.1:${SSH_PORT:-4444}:22" \
+    -e "SSH_KEY=${SSH_KEY:-$(cat ~/.ssh/id_rsa.pub)}" \
+    "#{@}" \
+    nickjer/docker-vpn-client
 ```
 
 Followed by setting the permissions:
@@ -138,6 +162,22 @@ You can connect to a Juniper network with:
 
 ```sh
 openconnect --juniper <vpn_host>
+```
+
+### OpenVPN Connect
+
+You will need to bind mount your client configuration file into the container
+if you want to be able to connect to the VPN using it. For now lets use the
+wrapper script we created above:
+
+```sh
+vpn-client -v "/path/to/client.ovpn:/client.ovpn"
+```
+
+Once inside the container we can connect to the VPN server using:
+
+```sh
+openvpn --config client.ovpn
 ```
 
 ### Connect through Chrome
