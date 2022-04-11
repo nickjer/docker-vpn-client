@@ -187,7 +187,7 @@ You can set up an SSH proxy with:
 ```sh
 ssh -o UserKnownHostsFile=/dev/null \
     -o StrictHostKeyChecking=no \
-    -D 8080
+    -D 8080 \
     -p 4444 root@localhost
 ```
 
