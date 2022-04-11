@@ -131,16 +131,16 @@ simplify launching VPN clients. Create the script `~/bin/vpn-client` with:
 ```sh
 #!/usr/bin/env bash
 
-exec
+exec \
   docker run \
     --rm \
-    -i \
-    -t \
+    --interactive \
+    --tty \
     --privileged \
     --sysctl net.ipv6.conf.all.disable_ipv6=0 \
-    -p "127.0.0.1:${SSH_PORT:-4444}:22" \
-    -e "SSH_KEY=${SSH_KEY:-$(cat ~/.ssh/id_rsa.pub)}" \
-    "#{@}" \
+    --publish "127.0.0.1:${SSH_PORT:-4444}:22" \
+    --env "SSH_KEY=${SSH_KEY:-$(cat ~/.ssh/id_rsa.pub)}" \
+    "${@}" \
     nickjer/docker-vpn-client
 ```
 
